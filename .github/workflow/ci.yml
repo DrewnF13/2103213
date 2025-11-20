@@ -1,0 +1,74 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  # ============================
+  # 1. Python Integration + Security Checks
+  # ============================
+  python-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r web/requirements.txt
+        pip install pytest requests pip-audit
+
+    - name: Run dependency security audit
+      run: pip-audit || true
+
+    - name: Run integration tests
+      run: pytest tests --disable-warnings -q
+
+  # ============================
+  # 2. UI Testing over HTTP using Docker Compose
+  # ============================
+  ui-tests:
+    runs-on: ubuntu-latest
+    needs: python-tests
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Docker Compose
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y docker-compose-plugin
+
+    - name: Start full stack (NGINX + Flask + Gitea)
+      run: |
+        docker compose up -d --build
+        echo "Waiting for app to start..."
+        sleep 8
+
+    # HTTP UI tests on port 80 (NGINX → Flask)
+    - name: UI Tests
+      run: |
+        echo "Testing home page..."
+        curl -f http://localhost/
+
+        echo "Testing invalid password redirect..."
+        curl -I -X POST http://localhost/ -d "password=123" | grep "302"
+
+        echo "Testing valid OWASP password redirect..."
+        curl -L -X POST http://localhost/ -d "password=GoodPass123!!!" | grep "Welcome"
+
+    - name: Tear down
+      if: always()
+      run: docker compose down
