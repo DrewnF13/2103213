@@ -1,0 +1,8 @@
+{
+  "name": "2103213",
+  "version": "1.0.0",
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "eslint-plugin-security": "^2.1.0"
+  }
+}
